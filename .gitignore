@@ -1,1 +1,6 @@
 venv/
+
+data/
+datasets/
+GAN_output/
+logs/
