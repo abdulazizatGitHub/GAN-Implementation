@@ -101,5 +101,5 @@ class WGAN:
             )
         )
 
-    def generate_samples(self, target_label: int, num int):
+    def generate_samples(self, target_label: int, num: int):
         return self.generator[target_label].generate_samples(num).cpu().detach()
