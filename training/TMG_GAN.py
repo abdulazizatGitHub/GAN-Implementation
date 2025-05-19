@@ -16,7 +16,7 @@ class TMGGAN:
 
         self.cd = models.CDModel(datasets.feature_num, datasets.label_num).to(config.device)
 
-        self.samples - dict()
+        self.samples = dict()
 
     def fit(self, dataset):
 

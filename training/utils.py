@@ -3,14 +3,14 @@ import random
 import torch
 import numpy as np
 import pandas as pd
-import torch as nn
+import torch.nn as nn
 from sklearn.datasets import make_classification, make_blobs
 from sklearn.preprocessing import minmax_scale
 from sklearn.model_selection import train_test_split
 
 import training
 
-def set_random_satet(seed: int = None) -> None:
+def set_random_state(seed: int = None) -> None:
     if seed is None:
         seed = training.config.seed
     

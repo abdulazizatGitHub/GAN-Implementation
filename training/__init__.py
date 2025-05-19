@@ -17,3 +17,10 @@ from training import(
 #     TMG_GAN,
 #     logging,
 # )
+
+from training.logger import Logger
+from training.TMG_GAN import TMGGAN
+from training.GAN import GAN
+from training.WGAN import WGAN
+from training.SNGAN import SNGAN
+from training.classifier import Classifier
