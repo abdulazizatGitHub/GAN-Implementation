@@ -12,7 +12,7 @@ class Logger(logging.Logger):
         sh.setLevel(config.log_config.level)
         self.addHandler(sh)
 
-        fh = logging.FileHandler()
+        fh = logging.FileHandler(config.path_config.logs / f'{name}.log')
         fh.setFormatter(config.log_config.file_formatter)
         sh.setLevel(config.log_config.level)
         self.addHandler(fh)
