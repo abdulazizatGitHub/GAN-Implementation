@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.preprocessing import MinMaxScaler, OrdinalEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
@@ -23,7 +23,7 @@ numerical_columns = ['dur', 'spkts', 'dpkts', 'sbytes', 'dbytes', 'rate', 'sttl'
 preprocessor = ColumnTransformer(
     transformers=[
         ('num', MinMaxScaler(), numerical_columns),
-        ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_columns)
+        ('cat', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), categorical_columns)
     ])
 
 def load_and_preprocess_data(file_path):

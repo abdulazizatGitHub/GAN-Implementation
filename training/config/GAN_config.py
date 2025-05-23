@@ -1,4 +1,4 @@
-epochs: int = 100
+epochs: int = 10
 
 batch_size: int = 128
 
