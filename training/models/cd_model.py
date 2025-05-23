@@ -26,7 +26,6 @@ class CDModel(nn.Module):
         self.hidden_status: torch.Tensor = None
         self.c_last_layer = nn.Sequential(
             nn.Linear(16, label_num),
-            nn.Softmax(dim=1),
         )
         self.d_last_layer = nn.Sequential(
             spectral_norm(nn.Linear(16, 1)),
@@ -36,5 +35,5 @@ class CDModel(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.main_model(x)
         self.hidden_status = x
-        x = x.squeeze()
-        return self.d_last_layer(x), self.d_last_layer(x)
+        # x = x.squeeze()
+        return self.d_last_layer(x), self.c_last_layer(x)

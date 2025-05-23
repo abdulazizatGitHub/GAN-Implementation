@@ -1,10 +1,13 @@
 import random
-
 import torch
 from torch.nn.functional import cross_entropy, cosine_similarity
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import pandas as pd
 
 from training import config, datasets, models
+from scripts.visualize_gan_output import plot_gan_output_grid
 
 class TMGGAN:
 
@@ -55,10 +58,17 @@ class TMGGAN:
                     generated_samples = self.generators[target_label].generate_samples(config.GAN_config.batch_size)
                     score_generated = self.cd(generated_samples)[0].mean()
                     d_loss = (score_generated - score_real) / 2
-                    c_loss = cross_entropy(
-                        input=predicted_labels,
-                        target=torch.full([len(predicted_labels)], target_label, device=config.device)
-                    )
+                    if predicted_labels.shape[1] == len(datasets.class_weights):
+                        c_loss = cross_entropy(
+                            input=predicted_labels,
+                            target=torch.full([len(predicted_labels)], target_label, device=config.device),
+                            weight=datasets.class_weights.to(config.device)
+                        )
+                    else:
+                        c_loss = cross_entropy(
+                            input=predicted_labels,
+                            target=torch.full([len(predicted_labels)], target_label, device=config.device)
+                        )
                     loss = d_loss + c_loss
                     loss.backward()
                     cd_optimizer.step()
@@ -74,10 +84,17 @@ class TMGGAN:
                     hidden_generated = self.cd.hidden_status
                     cd_hidden_loss = - cosine_similarity(hidden_real, hidden_generated).mean()
                     score_generated = score_generated.mean()
-                    loss_label = cross_entropy(
-                        input=predicted_labels,
-                        target=torch.full([len(predicted_labels)], target_label, device=config.device)
-                    )
+                    if predicted_labels.shape[1] == len(datasets.class_weights):
+                        loss_label = cross_entropy(
+                            input=predicted_labels,
+                            target=torch.full([len(predicted_labels)], target_label, device=config.device),
+                            weight=datasets.class_weights.to(config.device)
+                        )
+                    else:
+                        loss_label = cross_entropy(
+                            input=predicted_labels,
+                            target=torch.full([len(predicted_labels)], target_label, device=config.device)
+                        )
 
                     if e < 1000:
                         cd_hidden_loss = 0
@@ -114,25 +131,7 @@ class TMGGAN:
                 i.step()
             
             if e % 10 == 0:
-                with torch.no_grad():
-
-                    for i in self.generators:
-                        i.eval()
-                    
-                    images = torch.cat([self.generate_samples(i, 10) for i in range(10)])
-
-                    for i in self.generators:
-                        i.train()
-                
-                f, axs = plt.subplots(10, 10)
-                
-                for i in range(10):
-                    for j in range(10):
-                        axs[i, j].imshow(images[i * 10 + j].permute(1, 2, 0))
-                        axs[i, j].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
-                
-                plt.savefig(config.path_config.GAN_out / f'tmg_{e}.jpg')
-                plt.close(f)
+                self.visualize_generated_samples(e)
         
         print('')
         self.cd.eval()
@@ -178,3 +177,20 @@ class TMGGAN:
                 patience -= 1
         
         return torch.cat(result)
+
+    def visualize_generated_samples(self, epoch):
+        with torch.no_grad():
+            real_samples = []
+            generated_samples = []
+            for i in range(datasets.label_num):
+                real = self.get_target_samples(i, 100).cpu().numpy()
+                gen = self.generate_samples(i, 100).cpu().numpy()
+                real_samples.append(real)
+                generated_samples.append(gen)
+            plot_gan_output_grid(
+                real_samples, generated_samples, epoch,
+                config.path_config.GAN_out, n_classes=datasets.label_num, n_points=100
+            )
+            
+            for i in self.generators:
+                i.train()

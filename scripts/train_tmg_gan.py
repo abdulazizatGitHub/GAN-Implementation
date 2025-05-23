@@ -58,7 +58,7 @@ if __name__ == '__main__':
             datasets.tr_samples = torch.cat([datasets.tr_samples, generated_samples])
             datasets.tr_labels = torch.cat([datasets.tr_labels, generated_labels])
 
-    with open('data.pkl', 'wb') as f:
+    with open('data/balanced_dataset.pkl', 'wb') as f:
         pickle.dump(
             (
                 datasets.tr_samples.numpy(),
@@ -75,8 +75,14 @@ if __name__ == '__main__':
     clf.fit(datasets.TrDataset())
     torch.cuda.empty_cache()
     clf.test(datasets.TeDataset())
+    print("\nTesting on original test set:")
+    print("Confusion Matrix:")
     print(clf.confusion_matrix)
+    print("\nMetrics:")
     print(clf.metrics)
     clf.binary_test(datasets.TeDataset())
+    print("\nBinary classification test:")
+    print("Confusion Matrix:")
     print(clf.confusion_matrix)
+    print("\nMetrics:")
     print(clf.metrics)

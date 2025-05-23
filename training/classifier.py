@@ -46,6 +46,14 @@ class Classifier:
         self.logger.info('Finished training')
 
     def predict(self, x: torch.Tensor, use_prob: bool = False) -> torch.Tensor:
+        # Check input dimensions
+        expected_features = datasets.feature_num
+        actual_features = x.shape[-1]
+        
+        if actual_features != expected_features:
+            self.logger.error(f"Feature mismatch: expected {expected_features}, got {actual_features}")
+            raise ValueError(f"Input has {actual_features} features, but model expects {expected_features}")
+        
         with torch.no_grad():
             prob = self.model(x)[1]
         if use_prob:
@@ -55,6 +63,16 @@ class Classifier:
 
     def test(self, dataset: datasets.TeDataset):
         self.model = self.model.cpu()
+        
+        # Check if test data dimensions match training data
+        print(f"Training feature count: {datasets.feature_num}")
+        print(f"Test data feature count: {dataset.samples.shape[-1]}")
+        
+        if dataset.samples.shape[-1] != datasets.feature_num:
+            raise ValueError(f"Test data has {dataset.samples.shape[-1]} features, "
+                           f"but model was trained with {datasets.feature_num} features. "
+                           f"Please ensure consistent preprocessing.")
+        
         predicted_labels = self.predict(dataset.samples.cpu())
         real_labels = dataset.labels.cpu()
         self.confusion_matrix = metrics.confusion_matrix(
@@ -88,6 +106,12 @@ class Classifier:
 
     def binary_test(self, dataset: datasets.TeDataset):
         self.model = self.model.cpu()
+        
+        # Check dimensions before prediction
+        if dataset.samples.shape[-1] != datasets.feature_num:
+            raise ValueError(f"Test data has {dataset.samples.shape[-1]} features, "
+                           f"but model was trained with {datasets.feature_num} features.")
+        
         predicted_labels = self.predict(dataset.samples.cpu())
         real_labels = dataset.labels.cpu()
         for idx, item in enumerate(predicted_labels):
