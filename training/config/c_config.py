@@ -1,4 +1,4 @@
-epochs: int = 10
+epochs: int = 100
 
 lr: float = 1e-3
 

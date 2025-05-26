@@ -22,9 +22,7 @@ class TMGGAN:
         self.samples = dict()
 
     def fit(self, dataset):
-        self.g_losses = []
-        self.d_losses = []
-        self.c_losses = []
+
         self.cd.train()
 
         for i in self.generators:
@@ -50,11 +48,6 @@ class TMGGAN:
         for e in range(config.GAN_config.epochs):
             print(f'\r{(e + 1) / config.GAN_config.epochs: .2%}', end='')
 
-            epoch_g_loss = 0.0
-            epoch_d_loss = 0.0
-            epoch_c_loss = 0.0
-            batch_count = 0
-
             for target_label in self.samples.keys():
                 #train C and D
                 for _ in range (config.GAN_config.cd_loopNo):
@@ -79,9 +72,6 @@ class TMGGAN:
                     loss = d_loss + c_loss
                     loss.backward()
                     cd_optimizer.step()
-                    epoch_d_loss += d_loss.item()
-                    epoch_c_loss += c_loss.item()
-                    batch_count += 1
                 
                 #train G
                 for _ in range(config.GAN_config.g_loopNo):
@@ -112,7 +102,6 @@ class TMGGAN:
                     g_loss = -score_generated + loss_label + cd_hidden_loss
                     g_loss.backward()
                     g_optimizers[target_label].step()
-                    epoch_g_loss += g_loss.item()
             
             for i in g_optimizers:
                 i.zero_grad()
@@ -141,29 +130,15 @@ class TMGGAN:
             for i in g_optimizers:
                 i.step()
             
-            if e % 10 == 0:
+            if e in [100, 200, 300, 400, 499]:
                 self.visualize_generated_samples(e)
-
-            # Store average losses for the epoch
-            if batch_count > 0:
-                self.g_losses.append(epoch_g_loss / batch_count)
-                self.d_losses.append(epoch_d_loss / batch_count)
-                self.c_losses.append(epoch_c_loss / batch_count)
-            else:
-                self.g_losses.append(0.0)
-                self.d_losses.append(0.0)
-                self.c_losses.append(0.0)
         
         print('')
         self.cd.eval()
 
         for i in self.generators:
             i.eval()
-
-        # Save losses to a .log file
-        with open('data/logs/loss_history.log', 'w') as f:
-            for epoch, (g, d, c) in enumerate(zip(self.g_losses, self.d_losses, self.c_losses), 1):
-                f.write(f'Epoch {epoch}: G_loss={g:.4f}, D_loss={d:.4f}, C_loss={c:.4f}\n')
+    
 
     def divideSamples(self, dataset: datasets.TrDataset) -> None:
         for sample, label in dataset:
