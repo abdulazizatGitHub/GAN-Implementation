@@ -8,6 +8,7 @@ import pandas as pd
 
 from training import config, datasets, models
 from scripts.visualize_gan_output import plot_gan_output_grid
+from training.tracker import TrainingTracker
 
 class TMGGAN:
 
@@ -20,6 +21,7 @@ class TMGGAN:
         self.cd = models.CDModel(datasets.feature_num, datasets.label_num).to(config.device)
 
         self.samples = dict()
+        self.tracker = TrainingTracker()
 
     def fit(self, dataset):
 
@@ -48,6 +50,13 @@ class TMGGAN:
         for e in range(config.GAN_config.epochs):
             print(f'\r{(e + 1) / config.GAN_config.epochs: .2%}', end='')
 
+            epoch_d_loss = 0.0
+            epoch_g_loss = 0.0
+            epoch_c_loss = 0.0
+            inter_cosine_vals = []
+            intra_cosine_vals = []
+            batch_count = 0
+
             for target_label in self.samples.keys():
                 #train C and D
                 for _ in range (config.GAN_config.cd_loopNo):
@@ -72,6 +81,9 @@ class TMGGAN:
                     loss = d_loss + c_loss
                     loss.backward()
                     cd_optimizer.step()
+                    epoch_d_loss += d_loss.item()
+                    epoch_c_loss += c_loss.item()
+                    batch_count += 1
                 
                 #train G
                 for _ in range(config.GAN_config.g_loopNo):
@@ -99,9 +111,41 @@ class TMGGAN:
                     if e < 1000:
                         cd_hidden_loss = 0
                     
-                    g_loss = -score_generated + loss_label + cd_hidden_loss
+                    # --- Cosine Similarity Loss (Equation 4) ---
+                    # Features for generated samples of class k
+                    F_gen_k = self.cd.main_model(generated_samples)
+                    # Features for real samples of class k
+                    F_real_k = self.cd.main_model(real_samples)
+                    # Features for generated samples of all other classes
+                    F_gen_j_list = []
+                    for j in range(datasets.label_num):
+                        if j == target_label:
+                            continue
+                        gen_j = self.generators[j].generate_samples(config.GAN_config.batch_size).to(config.device)
+                        F_gen_j = self.cd.main_model(gen_j)
+                        F_gen_j_list.append(F_gen_j)
+                    F_gen_j_all = torch.cat(F_gen_j_list, dim=0)  # [num_other_gen, feat_dim]
+
+                    # Normalize features
+                    F_gen_k_norm = F_gen_k / F_gen_k.norm(dim=1, keepdim=True)
+                    F_real_k_norm = F_real_k / F_real_k.norm(dim=1, keepdim=True)
+                    F_gen_j_norm = F_gen_j_all / F_gen_j_all.norm(dim=1, keepdim=True)
+
+                    # Intra similarity: mean cosine similarity between F_gen_k and F_real_k
+                    intra_cos_matrix = torch.mm(F_gen_k_norm, F_real_k_norm.t()).abs()
+                    intra_sim = intra_cos_matrix.mean()
+
+                    # Inter similarity: mean cosine similarity between F_gen_k and F_gen_j_all
+                    inter_cos_matrix = torch.mm(F_gen_k_norm, F_gen_j_norm.t()).abs()
+                    inter_sim = inter_cos_matrix.mean()
+
+                    cosine_loss = inter_sim - intra_sim
+
+                    # --- Add to generator loss ---
+                    g_loss = -score_generated + loss_label + cd_hidden_loss + cosine_loss
                     g_loss.backward()
                     g_optimizers[target_label].step()
+                    epoch_g_loss += g_loss.item()
             
             for i in g_optimizers:
                 i.zero_grad()
@@ -124,11 +168,39 @@ class TMGGAN:
                             )
                         )
             
-            g_hidden_losses = torch.mean(torch.stack(g_hidden_losses)) / datasets.feature_num
-            g_hidden_losses.backward()
+            g_hidden_losses = torch.stack(g_hidden_losses)
+            inter_cosine = torch.mean(g_hidden_losses).item() if len(g_hidden_losses) > 0 else 0.0
 
+            # Intra-class cosine similarity: pairwise between generated and real samples for each class
+            intra_class_cosines = []
+            with torch.no_grad():
+                for k in range(datasets.label_num):
+                    batch_size = min(len(self.samples[k]), 32)
+                    gen_samples = self.generate_samples(k, batch_size).to(config.device)
+                    real_samples = self.get_target_samples(k, batch_size).to(config.device)
+                    F_gen = self.cd.main_model(gen_samples)
+                    F_real = self.cd.main_model(real_samples)
+                    # Normalize features
+                    F_gen_norm = F_gen / F_gen.norm(dim=1, keepdim=True)
+                    F_real_norm = F_real / F_real.norm(dim=1, keepdim=True)
+                    # Pairwise cosine similarity (diagonal)
+                    pairwise_cos = (F_gen_norm * F_real_norm).sum(dim=1).abs()
+                    intra_class_cosines.append(pairwise_cos.mean().item())
+            intra_cosine = float(np.mean(intra_class_cosines)) if len(intra_class_cosines) > 0 else 0.0
+            g_hidden_losses.mean().backward()
             for i in g_optimizers:
                 i.step()
+            
+            # Log and track metrics
+            if batch_count > 0:
+                self.tracker.log_epoch(
+                    epoch=e+1,
+                    d_loss=epoch_d_loss/batch_count,
+                    g_loss=epoch_g_loss/batch_count,
+                    c_loss=epoch_c_loss/batch_count,
+                    inter_cos=inter_cosine,
+                    intra_cos=intra_cosine
+                )
             
             if e in [100, 200, 300, 400, 499]:
                 self.visualize_generated_samples(e)
@@ -138,6 +210,9 @@ class TMGGAN:
 
         for i in self.generators:
             i.eval()
+        
+        # Plot metrics at the end
+        self.tracker.plot_metrics(config.path_config.GAN_out)
     
 
     def divideSamples(self, dataset: datasets.TrDataset) -> None:
