@@ -8,6 +8,7 @@ data: Path = project/'data'
 GAN_out: Path = data/'GAN_output'
 datasets: Path = data/'datasets'
 logs: Path = data/'logs'
+classifier: Path = data/'classifier_output'
 
 for i in list(vars().values()):
     if isinstance(i, Path):

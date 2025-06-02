@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 # Only plotting utility at top-level
 
@@ -14,19 +15,32 @@ def plot_gan_output_grid(real_samples, generated_samples, epoch, out_path, n_cla
         epoch: int, current epoch
         out_path: Path or str, where to save the image
         n_classes: int, number of classes
-        n_points: int, number of points to plot per class
+        n_points: int, This parameter is no longer strictly used for slicing,
+                  the function will plot all samples provided in the input lists.
     """
     fig, axes = plt.subplots(1, n_classes, figsize=(3*n_classes, 3))
     if n_classes == 1:
         axes = [axes]
     for i in range(n_classes):
         ax = axes[i]
-        # Use PCA for 2D projection if needed
-        pca = PCA(n_components=2)
-        real_proj = pca.fit_transform(real_samples[i][:n_points])
-        gen_proj = pca.transform(generated_samples[i][:n_points])
-        ax.scatter(real_proj[:, 0], real_proj[:, 1], color='blue', s=10, label='Real', alpha=0.6)
-        ax.scatter(gen_proj[:, 0], gen_proj[:, 1], color='orange', s=10, label='Generated', alpha=0.6)
+        
+        real_data = real_samples[i]
+        gen_data = generated_samples[i]
+
+        if len(real_data) > 0 or len(gen_data) > 0:
+            # Combine data for t-SNE fitting
+            combined_data = np.concatenate([real_data, gen_data], axis=0)
+            # Use t-SNE for 2D projection
+            tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+            combined_proj = tsne.fit_transform(combined_data)
+            
+            # Split projected data back
+            real_proj = combined_proj[:len(real_data)]
+            gen_proj = combined_proj[len(real_data):]
+            
+            ax.scatter(real_proj[:, 0], real_proj[:, 1], color='blue', s=10, label='Real', alpha=0.6)
+            ax.scatter(gen_proj[:, 0], gen_proj[:, 1], color='orange', s=10, label='Generated', alpha=0.6)
+        
         ax.set_title(f'Class {i}')
         ax.set_xticks([])
         ax.set_yticks([])

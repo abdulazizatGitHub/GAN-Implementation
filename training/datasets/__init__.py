@@ -43,6 +43,11 @@ def load_and_preprocess_data(train_path, test_path):
     X_test = df_test.drop(['id', 'attack_cat', 'label'], axis=1)
     y_test = df_test['attack_cat'].map(category_mapping)
 
+    # Print unique values in categorical columns
+    print("\nUnique values in categorical columns:")
+    for col in categorical_columns:
+        print(f"{col}: {len(X_train[col].unique())} unique values")
+
     # Fit preprocessor on training data only
     preprocessor = ColumnTransformer(
         transformers=[
@@ -52,6 +57,12 @@ def load_and_preprocess_data(train_path, test_path):
     )
     X_train_processed = preprocessor.fit_transform(X_train)
     X_test_processed = preprocessor.transform(X_test)
+
+    # Print feature dimensions
+    print(f"\nFeature dimensions after preprocessing:")
+    print(f"Number of numerical features: {len(numerical_columns)}")
+    print(f"Number of categorical features after OneHotEncoder: {X_train_processed.shape[1] - len(numerical_columns)}")
+    print(f"Total features: {X_train_processed.shape[1]}")
 
     # Convert to tensors
     X_train_tensor = torch.FloatTensor(X_train_processed)
