@@ -1,4 +1,7 @@
 import random
+import logging
+import yaml
+from pathlib import Path
 
 import torch
 import numpy as np
@@ -9,6 +12,44 @@ from sklearn.preprocessing import minmax_scale
 from sklearn.model_selection import train_test_split
 
 import training
+
+def setup_logging(output_dir: str) -> logging.Logger:
+    """Setup logging configuration."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create logger
+    logger = logging.getLogger('HDSF-GAN')
+    logger.setLevel(logging.INFO)
+    
+    # Create handlers
+    log_file = output_dir / 'training.log'
+    file_handler = logging.FileHandler(log_file)
+    console_handler = logging.StreamHandler()
+    
+    # Create formatters and add it to handlers
+    log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(log_format)
+    console_handler.setFormatter(log_format)
+    
+    # Add handlers to the logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+def load_config(config_path: Path) -> None:
+    """Load configuration from YAML file."""
+    with open(config_path, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    
+    # Update GAN config
+    for key, value in config_dict.get('GAN_config', {}).items():
+        setattr(training.config.GAN_config, key, value)
+    
+    # Update path config
+    for key, value in config_dict.get('path_config', {}).items():
+        setattr(training.config.path_config, key, Path(value))
 
 def set_random_state(seed: int = None) -> None:
     if seed is None:
@@ -99,4 +140,6 @@ def init_weights(layer: nn.Module):
     elif type(layer) == nn.BatchNorm1d:
         nn.init.normal_(layer.weight, 1.0, 0.02)
         nn.init.constant_(layer.bias, 0)
-    
+
+def one_hot(labels, num_classes):
+        return torch.nn.functional.one_hot(labels, num_classes).float()

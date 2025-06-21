@@ -31,6 +31,9 @@ class CDModel(nn.Module):
             spectral_norm(nn.Linear(16, 1)),
         )
         self.apply(init_weights)
+        
+        # Add output dimension property
+        # self.output_dim = 16  # Output dimension of main_model
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.main_model(x)

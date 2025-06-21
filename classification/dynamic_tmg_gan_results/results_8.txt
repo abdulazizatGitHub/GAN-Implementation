@@ -1,0 +1,16 @@
+Seed: 8
+Accuracy: 0.9520, F1: 0.7375, Recall: 0.8320, Precision: 0.6820, AUC: 0.9893
+Classification Report:
+              precision    recall  f1-score   support
+
+           0     0.9928    0.9680    0.9803     37000
+           1     0.8589    0.9144    0.8858      4089
+           2     0.7801    0.8524    0.8147      3496
+           3     0.4169    0.7434    0.5342       378
+           4     0.3614    0.6818    0.4724        44
+
+    accuracy                         0.9520     45007
+   macro avg     0.6820    0.8320    0.7375     45007
+weighted avg     0.9587    0.9520    0.9546     45007
+
+

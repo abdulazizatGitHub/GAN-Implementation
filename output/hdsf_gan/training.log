@@ -1,0 +1,32 @@
+2025-06-16 13:35:24,684 - HDSF-GAN - INFO - Starting HDSF-GAN training on UNSW-NB15 dataset
+2025-06-16 13:35:24,686 - HDSF-GAN - INFO - Using device: cpu
+2025-06-16 13:35:24,686 - HDSF-GAN - INFO - Loading and preprocessing UNSW-NB15 dataset...
+2025-06-16 13:35:25,806 - HDSF-GAN - INFO - Dataset loaded with 80018 training samples
+2025-06-16 13:35:25,806 - HDSF-GAN - INFO - Feature dimensions: 194
+2025-06-16 13:35:25,807 - HDSF-GAN - INFO - Number of classes: 5
+2025-06-16 13:35:25,807 - HDSF-GAN - INFO - Class distribution:
+2025-06-16 13:35:25,808 - HDSF-GAN - INFO - Class 0: 56000 samples
+2025-06-16 13:35:25,808 - HDSF-GAN - INFO - Class 1: 12264 samples
+2025-06-16 13:35:25,808 - HDSF-GAN - INFO - Class 2: 10491 samples
+2025-06-16 13:35:25,810 - HDSF-GAN - INFO - Class 3: 1133 samples
+2025-06-16 13:35:25,810 - HDSF-GAN - INFO - Class 4: 130 samples
+2025-06-16 13:35:25,810 - HDSF-GAN - INFO - Initializing HDSF-GAN...
+2025-06-16 13:35:25,846 - HDSF-GAN - INFO - Starting training...
+2025-06-16 13:38:01,378 - HDSF-GAN - INFO - Saving final model...
+2025-06-16 13:38:01,389 - HDSF-GAN - INFO - Training completed successfully!
+2025-06-16 13:39:36,023 - HDSF-GAN - INFO - Starting HDSF-GAN training on UNSW-NB15 dataset
+2025-06-16 13:39:36,025 - HDSF-GAN - INFO - Using device: cpu
+2025-06-16 13:39:36,025 - HDSF-GAN - INFO - Loading and preprocessing UNSW-NB15 dataset...
+2025-06-16 13:39:36,974 - HDSF-GAN - INFO - Dataset loaded with 80018 training samples
+2025-06-16 13:39:36,975 - HDSF-GAN - INFO - Feature dimensions: 194
+2025-06-16 13:39:36,975 - HDSF-GAN - INFO - Number of classes: 5
+2025-06-16 13:39:36,975 - HDSF-GAN - INFO - Class distribution:
+2025-06-16 13:39:36,975 - HDSF-GAN - INFO - Class 0: 56000 samples
+2025-06-16 13:39:36,976 - HDSF-GAN - INFO - Class 1: 12264 samples
+2025-06-16 13:39:36,976 - HDSF-GAN - INFO - Class 2: 10491 samples
+2025-06-16 13:39:36,976 - HDSF-GAN - INFO - Class 3: 1133 samples
+2025-06-16 13:39:36,976 - HDSF-GAN - INFO - Class 4: 130 samples
+2025-06-16 13:39:36,976 - HDSF-GAN - INFO - Initializing HDSF-GAN...
+2025-06-16 13:39:37,011 - HDSF-GAN - INFO - Starting training...
+2025-06-16 13:53:48,836 - HDSF-GAN - INFO - Saving final model...
+2025-06-16 13:53:48,845 - HDSF-GAN - INFO - Training completed successfully!

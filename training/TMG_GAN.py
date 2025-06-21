@@ -208,8 +208,8 @@ class TMGGAN:
                     intra_cos=intra_cosine
                 )
             
-            if e in [500, 1000, 1500, 1999]:
-                self.visualize_generated_samples(e)
+            if e + 1 in [500, 1000, 1500, 2000]:
+                self.visualize_generated_samples(e + 1)
         
         print('')
         self.cd.eval()
@@ -218,7 +218,7 @@ class TMGGAN:
             i.eval()
         
         # Plot metrics at the end
-        self.tracker.plot_metrics(config.path_config.GAN_out)
+        self.tracker.plot_metrics(config.path_config.original_gan_out)
 
         # --- Save trained models ---
         save_dir = config.path_config.data / "trained_models"
@@ -282,8 +282,8 @@ class TMGGAN:
                 real_samples.append(real)
                 generated_samples.append(gen)
             plot_gan_output_grid(
-                real_samples, generated_samples, epoch,
-                config.path_config.GAN_out, n_classes=datasets.label_num, n_points=100
+                real_samples, generated_samples, [np.empty((0, real_samples[0].shape[1])) for _ in range(datasets.label_num)], epoch,
+                config.path_config.original_gan_out, n_classes=datasets.label_num, n_points=100
             )
             
             for i in self.generators:

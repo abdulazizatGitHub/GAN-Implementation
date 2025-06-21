@@ -82,9 +82,16 @@ tr_samples, tr_labels, te_samples, te_labels, preprocessor = load_and_preprocess
 feature_num = tr_samples.shape[1]  # Number of features after preprocessing
 label_num = 5  # Number of classes (Normal, DoS, Reconnaissance, Shellcode, Worms)
 
-# Calculate class weights for handling imbalance
+# Calculate class weights and imbalance ratios for handling imbalance
 class_counts = torch.bincount(tr_labels)
+max_count = class_counts.max()
+imbalance_ratios = {i: (max_count / count).item() for i, count in enumerate(class_counts)}
 class_weights = 1.0 / class_counts
 class_weights = class_weights / class_weights.sum()
+
+# Print class distribution information
+print("\nClass Distribution:")
+for i, (count, ratio) in enumerate(imbalance_ratios.items()):
+    print(f"Class {i}: Count = {count}, Imbalance Ratio = {ratio:.2f}")
 
 pass
