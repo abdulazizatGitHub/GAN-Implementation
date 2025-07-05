@@ -7,6 +7,9 @@ import torch
 import training
 from training import Classifier, datasets, utils
 
+from sklearn.utils.class_weight import compute_class_weight
+import numpy as np
+
 # dataset = 'KDDCUP99'
 # dataset = 'NSL-KDD'
 
@@ -45,13 +48,21 @@ if __name__ == '__main__':
     # print(datasets.feature_num)
 
     utils.set_random_state()
-    tmg_gan = training.TMGGANDPL()
+    tmg_gan = training.MYMETHOD()
     tmg_gan.fit(training.datasets.TrDataset())
     # count the max number of samples
     max_cnt = max([len(tmg_gan.samples[i]) for i in tmg_gan.samples.keys()])
+
+    # Compute class weights
+    labels = np.array([label for _, label in datasets.TrDataset()])
+    classes = np.unique(labels)
+    class_weights = compute_class_weight('balanced', classes=classes, y=labels)
+    # Normalize class weights so the largest is 1
+    norm_class_weights = class_weights / class_weights.max()
+
     # generate samples
-    for i in tmg_gan.samples.keys():
-        cnt_generated = max_cnt - len(tmg_gan.samples[i])
+    for i, w in enumerate(norm_class_weights):
+        cnt_generated = int((max_cnt - len(tmg_gan.samples[i])) * w)
         if cnt_generated > 0:
             generated_samples = tmg_gan.generate_qualified_samples(i, cnt_generated)
             generated_labels = torch.full([cnt_generated], i)

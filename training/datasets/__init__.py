@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
+from sklearn.feature_selection import SelectKBest, f_classif
 
 from training.config import path_config
 from training.datasets.tr_dataset import TrDataset
@@ -58,10 +59,13 @@ def load_and_preprocess_data(train_path, test_path):
     X_train_processed = preprocessor.fit_transform(X_train)
     X_test_processed = preprocessor.transform(X_test)
 
+    # Select the top 55 features using SelectKBest
+    selector = SelectKBest(f_classif, k=55)
+    X_train_processed = selector.fit_transform(X_train_processed, y_train)
+    X_test_processed = selector.transform(X_test_processed)
+
     # Print feature dimensions
-    print(f"\nFeature dimensions after preprocessing:")
-    print(f"Number of numerical features: {len(numerical_columns)}")
-    print(f"Number of categorical features after OneHotEncoder: {X_train_processed.shape[1] - len(numerical_columns)}")
+    print(f"\nFeature dimensions after preprocessing (SelectKBest to 55):")
     print(f"Total features: {X_train_processed.shape[1]}")
 
     # Convert to tensors

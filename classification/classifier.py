@@ -15,24 +15,24 @@ import os
 print(tf.config.list_physical_devices('GPU'))
 
 # Load data
-with open('data/original_tmg_gan_balanced_dataset.pkl', 'rb') as f:
-    tr_samples_balanced_orig, tr_labels_balanced_orig, original_te_samples, original_te_labels = pickle.load(f)
+with open('dpl_data.pkl', 'rb') as f:
+    tr_samples, tr_labels, te_samples, te_labels = pickle.load(f)
 
 # Print the data shape to ensure it meets expectations
-print(f"Training samples shape: {tr_samples_balanced_orig.shape}")
-print(f"Test samples shape: {original_te_samples.shape}")
+print(f"Training samples shape: {tr_samples.shape}")
+print(f"Test samples shape: {te_samples.shape}")
 
 # Dynamically determine input dimension
-input_dim = tr_samples_balanced_orig.shape[1] # Number of features
+input_dim = tr_samples.shape[1] # Number of features
 print(f"Dynamically determined input dimension: {input_dim}")
 
 # One-hot encode the labels
-training_labels = to_categorical(tr_labels_balanced_orig)
-test_labels = to_categorical(original_te_labels)
+training_labels = to_categorical(tr_labels)
+test_labels = to_categorical(te_labels)
 
 # Data used directly without reshaping for CNN (as it's a DNN classifier)
-x_train = tr_samples_balanced_orig
-x_test = original_te_samples
+x_train = tr_samples
+x_test = te_samples
 
 # Print adjusted data shape
 print(f"x_train prepared for DNN: {x_train.shape}")
@@ -45,7 +45,7 @@ training_epochs = 50
 batch_size = 128  # Reduce the batch size to decrease memory usage
 
 # Create output folder
-output_dir = './classification/tmg_gan_results/'
+output_dir = os.path.join('./classification/TMG_WGAN_results/', 'multi_class')
 os.makedirs(output_dir, exist_ok=True)
 
 # Define sentiment category labels
@@ -140,6 +140,20 @@ def train_and_evaluate(seed):
     # Print evaluation metrics
     print(f"Recall: {recall:.4f}, F1: {f1:.4f}, Accuracy: {acc:.4f}, Precision: {precision:.4f}, AUC: {auc_score:.4f}")
 
+    # --- Per-seed metric bar plot ---
+    metrics = [acc, recall, f1, precision]
+    metric_names = ['Accuracy', 'Recall', 'F1 Score', 'Precision']
+    plt.figure(figsize=(6, 4))
+    plt.bar(metric_names, metrics, color=['blue', 'orange', 'green', 'red'])
+    plt.ylim(0, 1)
+    plt.title(f'Metrics for Seed {seed}')
+    for i, v in enumerate(metrics):
+        plt.text(i, v + 0.01, f'{v:.2f}', ha='center')
+    plt.ylabel('Score')
+    os.makedirs(os.path.join(output_dir, 'matrices_bar_plots'), exist_ok=True)
+    plt.savefig(os.path.join(output_dir, 'matrices_bar_plots', f'metrics_bar_seed_{seed}.png'))
+    plt.close()
+
     # Save results to text file
     result_txt = os.path.join(output_dir, f'results_{seed}.txt')
     with open(result_txt, 'a') as f:
@@ -175,3 +189,64 @@ for result in results:
 # Find the random seed that produced the best results
 best_result = max(results, key=lambda x: x['accuracy'])
 print(f"\nBest seed: {best_result['seed']}, Best Accuracy: {best_result['accuracy']:.4f}")
+
+# --- Comparison plots for all seeds ---
+import matplotlib.pyplot as plt
+
+seeds = [result['seed'] for result in results]
+accuracies = [result['accuracy'] for result in results]
+recalls = [result['recall'] for result in results]
+f1s = [result['f1'] for result in results]
+precisions = [result['precision'] for result in results]
+
+# Accuracy comparison
+plt.figure(figsize=(8, 5))
+plt.plot(seeds, accuracies, marker='o', color='blue', label='Accuracy')
+plt.title('Accuracy per Seed')
+plt.xlabel('Seed')
+plt.ylabel('Accuracy')
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True)
+os.makedirs(os.path.join(output_dir, 'accuracy_plots'), exist_ok=True)
+plt.savefig(os.path.join(output_dir, 'accuracy_plots', 'accuracy_per_seed.png'))
+plt.close()
+
+# Recall comparison
+plt.figure(figsize=(8, 5))
+plt.plot(seeds, recalls, marker='o', color='orange', label='Recall')
+plt.title('Recall per Seed')
+plt.xlabel('Seed')
+plt.ylabel('Recall')
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True)
+os.makedirs(os.path.join(output_dir, 'recall_plots'), exist_ok=True)
+plt.savefig(os.path.join(output_dir, 'recall_plots', 'recall_per_seed.png'))
+plt.close()
+
+# F1 Score comparison
+plt.figure(figsize=(8, 5))
+plt.plot(seeds, f1s, marker='o', color='green', label='F1 Score')
+plt.title('F1 Score per Seed')
+plt.xlabel('Seed')
+plt.ylabel('F1 Score')
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True)
+os.makedirs(os.path.join(output_dir, 'f1_score_plots'), exist_ok=True)
+plt.savefig(os.path.join(output_dir, 'f1_score_plots', 'f1_per_seed.png'))
+plt.close()
+
+# Precision comparison
+plt.figure(figsize=(8, 5))
+plt.plot(seeds, precisions, marker='o', color='red', label='Precision')
+plt.title('Precision per Seed')
+plt.xlabel('Seed')
+plt.ylabel('Precision')
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True)
+os.makedirs(os.path.join(output_dir, 'precision_plots'), exist_ok=True)
+plt.savefig(os.path.join(output_dir, 'precision_plots', 'precision_per_seed.png'))
+plt.close()

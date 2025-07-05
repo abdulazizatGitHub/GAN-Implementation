@@ -1,0 +1,32 @@
+Seed: 0
+Accuracy: 0.9499, F1: 0.7621, Recall: 0.8203, Precision: 0.7272, AUC: 0.9891
+Classification Report:
+              precision    recall  f1-score   support
+
+           0     0.9932    0.9638    0.9783     37000
+           1     0.8437    0.9281    0.8839      4089
+           2     0.7863    0.8598    0.8214      3496
+           3     0.3537    0.6905    0.4677       378
+           4     0.6591    0.6591    0.6591        44
+
+    accuracy                         0.9499     45007
+   macro avg     0.7272    0.8203    0.7621     45007
+weighted avg     0.9579    0.9499    0.9529     45007
+
+
+Seed: 0
+Accuracy: 0.9423, F1: 0.7466, Recall: 0.7795, Precision: 0.7208, AUC: 0.9861
+Classification Report:
+              precision    recall  f1-score   support
+
+           0     0.9910    0.9580    0.9742     37000
+           1     0.8082    0.9191    0.8601      4089
+           2     0.7361    0.8521    0.7899      3496
+           3     0.4020    0.5317    0.4579       378
+           4     0.6667    0.6364    0.6512        44
+
+    accuracy                         0.9423     45007
+   macro avg     0.7208    0.7795    0.7466     45007
+weighted avg     0.9493    0.9423    0.9449     45007
+
+

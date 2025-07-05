@@ -1,6 +1,6 @@
 import random
 import torch
-from torch.nn.functional import cross_entropy
+from torch.nn.functional import cross_entropy, normalize, relu
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -8,10 +8,11 @@ import pandas as pd
 import math
 
 from training import config, datasets, models
-from scripts.visualize_gan_output import plot_gan_output_grid
+from scripts.visualize_gan_output import plot_gan_output_grid, plot_class_tsne
 from training.tracker import TrainingTracker
+from torch.optim.lr_scheduler import StepLR, MultiStepLR
 
-class TMGGANDPL:
+class MYMETHOD:
     def __init__(self):
         self.generators = [
             models.GeneratorModel(config.GAN_config.z_size, datasets.feature_num).to(config.device)
@@ -20,206 +21,142 @@ class TMGGANDPL:
         self.cd = models.CDModel(datasets.feature_num, datasets.label_num).to(config.device)
         self.samples = dict()
         self.tracker = TrainingTracker()
-        # Compute imbalance ratios and dynamic weights
+        # Loss weights
+        self.lambda_adv = 1.0
+        self.lambda_cls = 1.0
+        self.lambda_fm = 70.0  # Feature matching loss weight
+
+        # Calculate class imbalance ratios and dynamic class weights
         class_counts = torch.bincount(torch.tensor([label for _, label in datasets.TrDataset()]))
         max_count = class_counts.max()
         self.ir_ratios = {i: (max_count / count).item() for i, count in enumerate(class_counts)}
-        self.lambda_base = 0.1
-        self.class_weights = {
-            label: self.lambda_base * math.log(1 + ir)
-            for label, ir in self.ir_ratios.items()
-        }
-    
-    def pearson_correlation(self, f1, f2):
-        f1_centered = f1 - f1.mean(dim=0, keepdim=True)
-        f2_centered = f2 - f2.mean(dim=0, keepdim=True)
-        cov = (f1_centered * f2_centered).mean()  # Direct mean over all elements
-        stds = torch.sqrt(torch.sum(f1_centered**2)) * torch.sqrt(torch.sum(f2_centered**2))
-        return cov / (stds + 1e-8)
+        self.lambda_base = 0.1  # You can tune this value
+        self.class_weights = torch.tensor([
+            self.lambda_base * math.log(1 + self.ir_ratios[i])
+            for i in range(len(class_counts))
+        ], dtype=torch.float32, device=config.device)
 
-    def calculate_dpl(self, target_label=None, batch_size=None, training=False):
-        """Unified DPL calculation used for both training and logging"""
-        if target_label is None:  # Logging case - calculate for all classes
-            dpl_loss = 0
-            inter_vals = []
-            intra_vals = []
-            
-            for label in range(datasets.label_num):
-                # Get samples
-                gen_samples = self.generate_samples(label, batch_size or config.GAN_config.batch_size).to(config.device)
-                real_samples = self.get_target_samples(label, batch_size or config.GAN_config.batch_size).to(config.device)
-                
-                # Get features
-                F_gen = self.cd.main_model(gen_samples)
-                F_real = self.cd.main_model(real_samples)
-                
-                # Intra-class (maximize)
-                intra_sim = torch.sigmoid(self.pearson_correlation(F_gen, F_real))
-                intra_vals.append(intra_sim.item())
-                
-                # Inter-class (minimize)
-                other_gen_samples = torch.cat([
-                    self.generate_samples(j, batch_size or config.GAN_config.batch_size).to(config.device)
-                    for j in range(datasets.label_num) if j != label
-                ])
-                F_other_gen = self.cd.main_model(other_gen_samples)
-                F_gen_rep = F_gen.repeat(other_gen_samples.shape[0] // F_gen.shape[0], 1)
-                inter_sim = torch.sigmoid(self.pearson_correlation(F_gen_rep, F_other_gen))
-                inter_vals.append(inter_sim.item())
-                
-                if training:
-                    lambda_k = self.class_weights[label]
-                    dpl_loss += lambda_k * (inter_sim - intra_sim)
-            
-            if not training:
-                # For logging, return weighted averages
-                weights = torch.tensor([self.class_weights[k] for k in range(datasets.label_num)])
-                weights = weights / weights.sum()
-                return (
-                    np.average(inter_vals, weights=weights.numpy()),
-                    np.average(intra_vals, weights=weights.numpy())
-                )
-            return dpl_loss
+    def gradient_penalty(self, real_samples, fake_samples):
+        alpha = torch.rand(real_samples.size(0), 1, device=config.device)
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+        d_interpolates, _ = self.cd(interpolates)
+        fake = torch.ones(d_interpolates.size(), device=config.device, requires_grad=False)
         
-        else:  # Training case - calculate for specific target_label
-            # Get samples
-            gen_samples = self.generators[target_label].generate_samples(batch_size or config.GAN_config.batch_size)
-            real_samples = self.get_target_samples(target_label, batch_size or config.GAN_config.batch_size)
-            
-            # Get features
-            F_gen = self.cd.main_model(gen_samples)
-            F_real = self.cd.main_model(real_samples)
-            
-            # Intra-class (maximize)
-            intra_sim = torch.sigmoid(self.pearson_correlation(F_gen, F_real))
-            
-            # Inter-class (minimize)
-            other_gen_samples = torch.cat([
-                self.generators[j].generate_samples(batch_size or config.GAN_config.batch_size).to(config.device)
-                for j in range(datasets.label_num) if j != target_label
-            ])
-            F_other_gen = self.cd.main_model(other_gen_samples)
-            F_gen_rep = F_gen.repeat(other_gen_samples.shape[0] // F_gen.shape[0], 1)
-            inter_sim = torch.sigmoid(self.pearson_correlation(F_gen_rep, F_other_gen))
-            
-            lambda_k = self.class_weights[target_label]
-            return lambda_k * (inter_sim - intra_sim)
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True, 
+        )[0]
+        
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
 
     def fit(self, dataset):
         self.cd.train()
         for i in self.generators:
             i.train()
         self.divideSamples(dataset)
-        cd_optimizer = torch.optim.Adam(
-            params=self.cd.parameters(),
-            lr=config.GAN_config.cd_lr,
-            betas=(0.5, 0.999),
-        )
+        cd_optimizer = torch.optim.Adam(self.cd.parameters(), lr=config.GAN_config.cd_lr, betas=(0.5, 0.9))
         g_optimizers = [
-            torch.optim.Adam(
-                params=self.generators[i].parameters(),
-                lr=config.GAN_config.g_lr,
-                betas=(0.5, 0.999),
-            )
-            for i in range(datasets.label_num)
+            torch.optim.Adam(g.parameters(), lr=config.GAN_config.g_lr, betas=(0.5, 0.9))
+            for g in self.generators
         ]
+        
+        # Add Learning Rate Schedulers
+        cd_scheduler = MultiStepLR(cd_optimizer, milestones=[1000, 1500], gamma=0.5)
+        g_schedulers = [MultiStepLR(optimizer, milestones=[1000, 1500], gamma=0.5) for optimizer in g_optimizers]
+
         for e in range(config.GAN_config.epochs):
             print(f'\r{(e + 1) / config.GAN_config.epochs: .2%}', end='')
+            
             epoch_d_loss = 0.0
             epoch_g_loss = 0.0
-            epoch_c_loss = 0.0
-            inter_pearson_vals = []
-            intra_pearson_vals = []
+            epoch_c_loss_real = 0.0
+            epoch_c_loss_fake = 0.0
             batch_count = 0
+
             for target_label in self.samples.keys():
-                # Train C and D
+                # --- Train Critic/Classifier ---
                 for _ in range(config.GAN_config.cd_loopNo):
                     cd_optimizer.zero_grad()
+                    
                     real_samples = self.get_target_samples(target_label, config.GAN_config.batch_size)
-                    score_real, predicted_labels = self.cd(real_samples)
-                    score_real = score_real.mean()
-                    generated_samples = self.generators[target_label].generate_samples(config.GAN_config.batch_size)
-                    score_generated = self.cd(generated_samples)[0].mean()
-                    d_loss = (score_generated - score_real) / 2
-                    if predicted_labels.shape[1] == len(datasets.class_weights):
-                        c_loss = cross_entropy(
-                            input=predicted_labels,
-                            target=torch.full([len(predicted_labels)], target_label, device=config.device),
-                            weight=datasets.class_weights.to(config.device)
-                        )
-                    else:
-                        c_loss = cross_entropy(
-                            input=predicted_labels,
-                            target=torch.full([len(predicted_labels)], target_label, device=config.device)
-                        )
-                    loss = d_loss + c_loss
-                    loss.backward()
+                    z = torch.randn(config.GAN_config.batch_size, config.GAN_config.z_size, device=config.device)
+                    fake_samples = self.generators[target_label](z)
+
+                    # WGAN Critic Loss
+                    real_validity, _ = self.cd(real_samples)
+                    fake_validity, _ = self.cd(fake_samples.detach())
+                    gp = self.gradient_penalty(real_samples, fake_samples)
+                    d_loss_wgan = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gp
+                    
+                    # Classification loss for real data
+                    _, real_logits = self.cd(real_samples)
+                    real_labels = torch.full((config.GAN_config.batch_size,), target_label, dtype=torch.long, device=config.device)
+                    c_loss_real = cross_entropy(real_logits, real_labels, weight=self.class_weights)
+                    
+                    # Total Discriminator Loss (with weights)
+                    d_loss = self.lambda_adv * d_loss_wgan + self.lambda_cls * c_loss_real
+                    d_loss.backward()
                     cd_optimizer.step()
-                    epoch_d_loss += d_loss.item()
-                    epoch_c_loss += c_loss.item()
-                    batch_count += 1
-                # Train G
-                for _ in range(config.GAN_config.g_loopNo):
-                    g_optimizers[target_label].zero_grad()
-                    
-                    # Generate samples and get scores
-                    generated_samples = self.generators[target_label].generate_samples(config.GAN_config.batch_size)
+
+                # --- Train Generator ---
+                g_optimizers[target_label].zero_grad()
+
+                z = torch.randn(config.GAN_config.batch_size, config.GAN_config.z_size, device=config.device)
+                gen_samples = self.generators[target_label](z)
+                
+                # WGAN Adversarial Loss
+                fake_validity, fake_logits = self.cd(gen_samples)
+                g_loss_adv = -torch.mean(fake_validity)
+
+                # Classification loss for fake data
+                target_labels = torch.full((config.GAN_config.batch_size,), target_label, dtype=torch.long, device=config.device)
+                c_loss_fake = cross_entropy(fake_logits, target_labels, weight=self.class_weights)
+
+                # Feature Matching Loss
+                with torch.no_grad():
                     real_samples = self.get_target_samples(target_label, config.GAN_config.batch_size)
-                    
-                    # Get CD outputs
-                    self.cd(real_samples)
-                    hidden_real = self.cd.hidden_status
-                    score_generated, predicted_labels = self.cd(generated_samples)
-                    hidden_generated = self.cd.hidden_status
-                    
-                    # Calculate losses
-                    cd_hidden_loss = 0
-                    if e >= 1000:
-                        cd_hidden_loss = -self.pearson_correlation(hidden_real, hidden_generated)
-                    
-                    score_generated = score_generated.mean()
-                    
-                    # Classification loss
-                    if predicted_labels.shape[1] == len(datasets.class_weights):
-                        loss_label = cross_entropy(
-                            input=predicted_labels,
-                            target=torch.full([len(predicted_labels)], target_label, device=config.device),
-                            weight=datasets.class_weights.to(config.device)
-                        )
-                    else:
-                        loss_label = cross_entropy(
-                            input=predicted_labels,
-                            target=torch.full([len(predicted_labels)], target_label, device=config.device)
-                        )
-                    
-                    # DPL loss (using unified calculation)
-                    dpl_loss = self.calculate_dpl(target_label=target_label, training=True)
-                    
-                    # Combined loss
-                    g_loss = -score_generated + cd_hidden_loss + dpl_loss
-                    g_loss.backward()
-                    g_optimizers[target_label].step()
-                    epoch_g_loss += g_loss.item()
+                    real_features = self.cd.main_model(real_samples)
+                fake_features = self.cd.main_model(gen_samples)
+                fm_loss = torch.nn.functional.mse_loss(fake_features.mean(dim=0), real_features.mean(dim=0))
+
+                # Total Generator Loss (with weights)
+                g_loss = self.lambda_adv * g_loss_adv + self.lambda_cls * c_loss_fake + self.lambda_fm * fm_loss
+                g_loss.backward()
+                g_optimizers[target_label].step()
+
+                # --- Logging ---
+                epoch_d_loss += d_loss.item()
+                epoch_g_loss += g_loss.item()
+                epoch_c_loss_real += c_loss_real.item()
+                epoch_c_loss_fake += c_loss_fake.item()
+                batch_count += 1
             
-            # Logging (using same DPL calculation)
-            inter_pearson, intra_pearson = self.calculate_dpl(batch_size=32)
-            
-            # Track metrics
+            # Step the schedulers
+            cd_scheduler.step()
+            for scheduler in g_schedulers:
+                scheduler.step()
+
             self.tracker.log_epoch(
-                epoch=e+1,
-                d_loss=epoch_d_loss/batch_count,
-                g_loss=epoch_g_loss/batch_count,
-                c_loss=epoch_c_loss/batch_count,
-                inter_cos=inter_pearson,
-                intra_cos=intra_pearson
+                e + 1, 
+                epoch_d_loss / batch_count, 
+                epoch_g_loss / batch_count,
+                epoch_c_loss_real / batch_count,
+                epoch_c_loss_fake / batch_count
             )
-            if e + 1 in [50, 100, 150, 200]:
-                self.visualize_generated_samples(e + 1)
-        print('')
+
+            if (e + 1) in [500, 1000, 1500, 2000]:
+                self.visualize_gan_output(e + 1, config.path_config.dpl_tmg_gan_out)
+        
+        self.tracker.plot_metrics(config.path_config.dpl_tmg_gan_out)
         self.cd.eval()
         for i in self.generators:
             i.eval()
-        self.tracker.plot_metrics(config.path_config.dpl_tmg_gan_out)
         # --- Save trained models ---
         save_dir = config.path_config.dpl_tmg_gan_out / "trained_models"
         save_dir.mkdir(parents=True, exist_ok=True)
@@ -260,18 +197,11 @@ class TMGGANDPL:
                 patience -= 1
         return torch.cat(result)
 
-    def visualize_generated_samples(self, epoch):
+    def visualize_gan_output(self, epoch, img_dir):
         with torch.no_grad():
-            real_samples = []
-            generated_samples = []
             for i in range(datasets.label_num):
                 real = self.get_target_samples(i, 100).cpu().numpy()
                 gen = self.generate_samples(i, 100).cpu().numpy()
-                real_samples.append(real)
-                generated_samples.append(gen)
-            plot_gan_output_grid(
-                real_samples, generated_samples, [np.empty((0, real_samples[0].shape[1])) for _ in range(datasets.label_num)], epoch,
-                config.path_config.dpl_tmg_gan_out, n_classes=datasets.label_num, n_points=100
-            )
+                plot_class_tsne(real, gen, i, epoch, img_dir)
             for i in self.generators:
                 i.train() 
